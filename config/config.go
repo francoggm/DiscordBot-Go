@@ -5,8 +5,9 @@ import (
 )
 
 type Config struct {
-	BotToken         string
-	OpenWeatherToken string
+	BotToken string
+	AppID    string
+	GuildID  string
 }
 
 var cfg *Config
@@ -25,7 +26,8 @@ func Read() error {
 	}
 
 	cfg.BotToken = viper.GetString("BOT_SECRET_KEY")
-	cfg.OpenWeatherToken = viper.GetString("OPEN_WEATHER_KEY")
+	cfg.AppID = viper.GetString("APP_ID")
+	cfg.GuildID = viper.GetString("GUILD_ID")
 
 	return nil
 }

@@ -12,9 +12,7 @@ func main() {
 		log.Fatalf("Error reading configs, error=%s", err.Error())
 	}
 
-	cfg := config.GetConfig()
-
-	bot, err := bot.Config(cfg.BotToken, cfg.OpenWeatherToken)
+	bot, err := bot.New()
 	if err != nil {
 		log.Fatalf("Error setting bot, error=%s", err.Error())
 	}

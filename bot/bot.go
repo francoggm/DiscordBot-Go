@@ -1,7 +1,8 @@
 package bot
 
 import (
-	"fmt"
+	"discord-bot/config"
+	"log"
 	"os"
 	"os/signal"
 
@@ -9,33 +10,60 @@ import (
 )
 
 type Bot struct {
-	botToken         string
-	openWeatherToken string
-	session          *discordgo.Session
+	token              string
+	appID              string
+	guildID            string
+	session            *discordgo.Session
+	registeredCommands []*discordgo.ApplicationCommand
 }
 
-func Config(botToken string, openWeatherToken string) (*Bot, error) {
-	s, err := discordgo.New("Bot " + botToken)
+func New() (*Bot, error) {
+	cfg := config.GetConfig()
+
+	s, err := discordgo.New("Bot " + cfg.BotToken)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Bot{
-		botToken:         botToken,
-		openWeatherToken: openWeatherToken,
-		session:          s,
+		token:              cfg.BotToken,
+		appID:              cfg.AppID,
+		guildID:            cfg.GuildID,
+		session:            s,
+		registeredCommands: make([]*discordgo.ApplicationCommand, len(commands)),
 	}, nil
 }
 
 func (b *Bot) Run() {
-	b.session.AddHandler(receiveMessage)
+	// b.session.AddHandler(receiveMessage)
+	b.session.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) {
+		log.Printf("Logged in as %v#%v", s.State.User.Username, s.State.User.Discriminator)
+	})
+	b.session.AddHandler(receiveInteraction)
 
-	b.session.Open()
+	err := b.session.Open()
+	if err != nil {
+		log.Fatalf("Cannot open the session : Error=%v", err)
+	}
 	defer b.session.Close()
 
-	fmt.Println("Running")
+	for i, command := range commands {
+		cmd, err := b.session.ApplicationCommandCreate(b.appID, b.guildID, command)
+		if err != nil {
+			log.Panicf("Failed to add command=%s : Error=%s", command.Name, err.Error())
+		}
+
+		b.registeredCommands[i] = cmd
+	}
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	<-c
+
+	for _, command := range b.registeredCommands {
+		err := b.session.ApplicationCommandDelete(b.appID, b.guildID, command.ID)
+		if err != nil {
+			log.Panicf("Failed to delete command=%s : Error=%s", command.Name, err.Error())
+		}
+	}
 }
