@@ -35,10 +35,7 @@ func New() (*Bot, error) {
 }
 
 func (b *Bot) Run() {
-	// b.session.AddHandler(receiveMessage)
-	b.session.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) {
-		log.Printf("Logged in as %v#%v", s.State.User.Username, s.State.User.Discriminator)
-	})
+	b.session.AddHandler(receiveLogin)
 	b.session.AddHandler(receiveInteraction)
 
 	err := b.session.Open()

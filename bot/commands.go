@@ -1,11 +1,13 @@
 package bot
 
 import (
+	"discord-bot/schedule"
 	"fmt"
-	"log"
 
 	"github.com/bwmarrin/discordgo"
 )
+
+// Interactions
 
 var (
 	commands = []*discordgo.ApplicationCommand{
@@ -31,7 +33,7 @@ var (
 				},
 				{
 					Name:        "hour",
-					Description: "The time the appointment will be (hh:mm AM/PM)",
+					Description: "The time the appointment will be (hh:mm)",
 					Type:        discordgo.ApplicationCommandOptionString,
 					Required:    true,
 				},
@@ -40,12 +42,32 @@ var (
 	}
 
 	commandHandlers = map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate){
-		"hello-world": helloWorld,
-		"schedule":    schedule,
+		"hello-world": helloWorldHandler,
+		"schedule":    scheduleHandler,
 	}
 )
 
-var helloWorld = func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+// Handlers functions
+
+func customInteractionResponse(content string) *discordgo.InteractionResponse {
+	return &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: content,
+		},
+	}
+}
+
+func customInteractionError(err error) *discordgo.InteractionResponse {
+	return &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: err.Error(),
+		},
+	}
+}
+
+var helloWorldHandler = func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
@@ -54,33 +76,32 @@ var helloWorld = func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	})
 }
 
-var schedule = func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	var (
-		appointment string
-		day         string
-		hours       string
-	)
+var scheduleHandler = func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	var sc schedule.Schedule
+
+	if i.User != nil {
+		sc.UserID = i.User.ID
+	} else {
+		sc.UserID = i.Member.User.ID
+	}
 
 	options := i.ApplicationCommandData().Options
 	for _, option := range options {
 		switch option.Name {
 		case "appointment":
-			appointment = option.StringValue()
+			sc.Appointment = option.StringValue()
 		case "day":
-			day = option.StringValue()
+			sc.Day = option.StringValue()
 		case "hour":
-			hours = option.StringValue()
+			sc.Hours = option.StringValue()
 		}
 	}
 
-	res := fmt.Sprintf("Appointment=%s : Day=%s : Hour=%s", appointment, day, hours)
-
-	log.Println(res)
-
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Content: res,
-		},
-	})
+	err := schedule.ScheduleAppointment(sc)
+	if err != nil {
+		s.InteractionRespond(i.Interaction, customInteractionError(err))
+	} else {
+		res := fmt.Sprintf("Successfuly schedule \"%s\" for %s %s", sc.Appointment, sc.Day, sc.Hours)
+		s.InteractionRespond(i.Interaction, customInteractionResponse(res))
+	}
 }
