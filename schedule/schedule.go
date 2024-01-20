@@ -92,13 +92,7 @@ func AlertAppointments(s *discordgo.Session) {
 
 				// date is in minute range, send appointment to user
 				if date.After(now.Add(-1*time.Minute)) && date.Before(now) {
-					go func(session *discordgo.Session, userID string, appointment string) {
-						c, err := session.UserChannelCreate(userID)
-						if err != nil {
-							return
-						}
-						session.ChannelMessageSend(c.ID, appointment)
-					}(s, record[0], record[1])
+					go sendAlert(s, record[0], record[1], record[2])
 
 					continue
 				}
@@ -120,4 +114,33 @@ func AlertAppointments(s *discordgo.Session) {
 		f.Close()
 		time.Sleep(10 * time.Second)
 	}
+}
+
+func sendAlert(s *discordgo.Session, userID string, appointment string, date string) {
+	c, err := s.UserChannelCreate(userID)
+	if err != nil {
+		return
+	}
+
+	s.ChannelMessageSendEmbed(c.ID, &discordgo.MessageEmbed{
+		Type:        discordgo.EmbedTypeGifv,
+		Title:       "Reminder",
+		Description: "There is your appointment!",
+		Color:       0x79b890,
+		Image: &discordgo.MessageEmbedImage{
+			URL: "https://cdn3.iconfinder.com/data/icons/hand-drawn-doodle-illustrations/1000/tools___alarm_clock_time_alert_reminder_hand_gesture-512.png",
+		},
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Name:   "Appointment",
+				Value:  appointment,
+				Inline: true,
+			},
+			{
+				Name:   "Chosen date",
+				Value:  date,
+				Inline: true,
+			},
+		},
+	})
 }
