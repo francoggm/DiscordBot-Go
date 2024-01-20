@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -25,9 +26,14 @@ type Schedule struct {
 }
 
 func ScheduleAppointment(sc Schedule) error {
+	var mtx sync.Mutex
+
 	if err := verifyInputs(sc); err != nil {
 		return err
 	}
+
+	mtx.Lock()
+	defer mtx.Unlock()
 
 	f, err := os.OpenFile(fpath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
@@ -35,11 +41,7 @@ func ScheduleAppointment(sc Schedule) error {
 	}
 	defer f.Close()
 
-	if err = verifyAppointmentExists(sc); err != nil {
-		return err
-	}
-
-	if err = writeAppointment(f, sc); err != nil {
+	if _, err = f.WriteString(sc.UserID + "," + sc.Appointment + "," + sc.Day + " " + sc.Hours + "\n"); err != nil {
 		return err
 	}
 
@@ -65,39 +67,15 @@ func verifyInputs(sc Schedule) error {
 	return nil
 }
 
-func verifyAppointmentExists(sc Schedule) error {
-	record := fmt.Sprintf("%s,%s,%s %s", sc.UserID, sc.Appointment, sc.Day, sc.Hours)
-
-	content, err := os.ReadFile(fpath)
-	if err != nil {
-		log.Fatalf(err.Error())
-	}
-
-	for _, line := range strings.Split(string(content), "\n") {
-		if strings.Contains(line, record) {
-			return errors.New("appointment already exists")
-		}
-	}
-
-	return nil
-}
-
-func writeAppointment(f *os.File, sc Schedule) error {
-	record := fmt.Sprintf("%s,%s,%s %s", sc.UserID, sc.Appointment, sc.Day, sc.Hours)
-
-	_, err := f.WriteString(record + "\n")
-	return err
-}
-
 func AlertAppointments(s *discordgo.Session) {
 	for {
-		f, err := os.Open(fpath)
+		f, err := os.OpenFile(fpath, os.O_CREATE|os.O_RDONLY, 0644)
 		if err != nil {
-			os.WriteFile(fpath, []byte{}, 0666)
+			time.Sleep(10 * time.Second)
+			continue
 		}
 
-		var bs []byte
-		buf := bytes.NewBuffer(bs)
+		buf := bytes.NewBuffer([]byte{})
 
 		scanner := bufio.NewScanner(f)
 		for scanner.Scan() {
@@ -110,16 +88,27 @@ func AlertAppointments(s *discordgo.Session) {
 					continue
 				}
 
-				if date.After(time.Now().Add(-1*time.Minute)) && date.Before(time.Now()) {
-					sendAlert(record[0], record[1])
+				now := time.Now()
+
+				// date is in minute range, send appointment to user
+				if date.After(now.Add(-1*time.Minute)) && date.Before(now) {
+					go func(session *discordgo.Session, userID string, appointment string) {
+						c, err := session.UserChannelCreate(userID)
+						if err != nil {
+							return
+						}
+						session.ChannelMessageSend(c.ID, appointment)
+					}(s, record[0], record[1])
+
 					continue
 				}
 
-				if date.Before(time.Now()) {
+				// date has passed
+				if date.Before(now) {
 					continue
 				}
 
-				buf.WriteString(line)
+				buf.WriteString(line + "\n")
 			}
 		}
 
@@ -131,9 +120,4 @@ func AlertAppointments(s *discordgo.Session) {
 		f.Close()
 		time.Sleep(10 * time.Second)
 	}
-}
-
-func sendAlert(userID string, appointment string) {
-	// send to user
-	fmt.Println("Appointment=" + appointment + " to " + userID)
 }
