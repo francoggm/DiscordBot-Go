@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	"github.com/bwmarrin/discordgo"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // Interactions
@@ -22,7 +24,7 @@ var (
 				{
 					Name:        "appointment",
 					Type:        discordgo.ApplicationCommandOptionString,
-					Description: "Description of the commitment",
+					Description: "Description of the appointment",
 					Required:    true,
 				},
 				{
@@ -49,7 +51,7 @@ var (
 
 // Handlers functions
 
-func customInteractionResponse(content string) *discordgo.InteractionResponse {
+func getCustomInteractionResponse(content string) *discordgo.InteractionResponse {
 	return &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
@@ -58,27 +60,23 @@ func customInteractionResponse(content string) *discordgo.InteractionResponse {
 	}
 }
 
-func customInteractionError(err error) *discordgo.InteractionResponse {
+func getCustomInteractionError(err error) *discordgo.InteractionResponse {
 	return &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Content: err.Error(),
+			Content: cases.Title(language.English, cases.NoLower).String(err.Error()) + "!",
 		},
 	}
 }
 
 var helloWorldHandler = func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Content: "Hello there, i'm a bot",
-		},
-	})
+	s.InteractionRespond(i.Interaction, getCustomInteractionResponse("Hello there, i'm a bot!"))
 }
 
 var scheduleHandler = func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	var sc schedule.Schedule
 
+	// user is nil if interaction is from server
 	if i.User != nil {
 		sc.UserID = i.User.ID
 	} else {
@@ -99,9 +97,9 @@ var scheduleHandler = func(s *discordgo.Session, i *discordgo.InteractionCreate)
 
 	err := schedule.ScheduleAppointment(sc)
 	if err != nil {
-		s.InteractionRespond(i.Interaction, customInteractionError(err))
+		s.InteractionRespond(i.Interaction, getCustomInteractionError(err))
 	} else {
 		res := fmt.Sprintf("Successfuly schedule \"%s\" for %s %s", sc.Appointment, sc.Day, sc.Hours)
-		s.InteractionRespond(i.Interaction, customInteractionResponse(res))
+		s.InteractionRespond(i.Interaction, getCustomInteractionResponse(res))
 	}
 }

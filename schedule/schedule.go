@@ -2,15 +2,19 @@ package schedule
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/bwmarrin/discordgo"
 )
 
 const (
-	scheduleFile = "schedule/schedule.txt"
+	fpath = "schedule/schedule.txt"
 )
 
 type Schedule struct {
@@ -25,13 +29,13 @@ func ScheduleAppointment(sc Schedule) error {
 		return err
 	}
 
-	f, err := os.OpenFile(scheduleFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(fpath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return errors.New("internal error, please try again")
 	}
 	defer f.Close()
 
-	if err = verifyAppointmentExists(f, sc); err != nil {
+	if err = verifyAppointmentExists(sc); err != nil {
 		return err
 	}
 
@@ -49,25 +53,28 @@ func verifyInputs(sc Schedule) error {
 
 	date := fmt.Sprintf("%s %s", sc.Day, sc.Hours)
 
-	appointmentDay, err := time.Parse("02/01/06 15:04", date)
+	appointment, err := time.ParseInLocation("02/01/06 15:04", date, time.Local)
 	if err != nil {
 		return errors.New("invalid date format")
 	}
 
-	// TODO: Fix comparation dates
-	if time.Now().Before(appointmentDay) {
+	if time.Now().After(appointment) {
 		return errors.New("selected period has passed")
 	}
 
 	return nil
 }
 
-func verifyAppointmentExists(f *os.File, sc Schedule) error {
+func verifyAppointmentExists(sc Schedule) error {
 	record := fmt.Sprintf("%s,%s,%s %s", sc.UserID, sc.Appointment, sc.Day, sc.Hours)
 
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		if strings.Contains(scanner.Text(), record) {
+	content, err := os.ReadFile(fpath)
+	if err != nil {
+		log.Fatalf(err.Error())
+	}
+
+	for _, line := range strings.Split(string(content), "\n") {
+		if strings.Contains(line, record) {
 			return errors.New("appointment already exists")
 		}
 	}
@@ -80,4 +87,53 @@ func writeAppointment(f *os.File, sc Schedule) error {
 
 	_, err := f.WriteString(record + "\n")
 	return err
+}
+
+func AlertAppointments(s *discordgo.Session) {
+	for {
+		f, err := os.Open(fpath)
+		if err != nil {
+			os.WriteFile(fpath, []byte{}, 0666)
+		}
+
+		var bs []byte
+		buf := bytes.NewBuffer(bs)
+
+		scanner := bufio.NewScanner(f)
+		for scanner.Scan() {
+			line := scanner.Text()
+			record := strings.Split(line, ",")
+
+			if len(record) >= 3 {
+				date, err := time.ParseInLocation("02/01/06 15:04", record[2], time.Local)
+				if err != nil {
+					continue
+				}
+
+				if date.After(time.Now().Add(-1*time.Minute)) && date.Before(time.Now()) {
+					sendAlert(record[0], record[1])
+					continue
+				}
+
+				if date.Before(time.Now()) {
+					continue
+				}
+
+				buf.WriteString(line)
+			}
+		}
+
+		err = os.WriteFile(fpath, buf.Bytes(), 0666)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		f.Close()
+		time.Sleep(10 * time.Second)
+	}
+}
+
+func sendAlert(userID string, appointment string) {
+	// send to user
+	fmt.Println("Appointment=" + appointment + " to " + userID)
 }

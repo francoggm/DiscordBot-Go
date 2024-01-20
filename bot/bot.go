@@ -2,6 +2,7 @@ package bot
 
 import (
 	"discord-bot/config"
+	"discord-bot/schedule"
 	"log"
 	"os"
 	"os/signal"
@@ -52,6 +53,8 @@ func (b *Bot) Run() {
 
 		b.registeredCommands[i] = cmd
 	}
+
+	go schedule.AlertAppointments(b.session)
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
