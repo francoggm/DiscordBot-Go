@@ -88,6 +88,7 @@ var scheduleHandler = func(s *discordgo.Session, i *discordgo.InteractionCreate)
 					{
 						Title:       "Error in schedule!",
 						Description: err.Error(),
+						Color:       0xB02506,
 					},
 				},
 			},
@@ -100,6 +101,7 @@ var scheduleHandler = func(s *discordgo.Session, i *discordgo.InteractionCreate)
 					{
 						Title:       "Successfuly schedule!",
 						Description: "\"" + sc.Appointment + "\" will be alerted in " + sc.Day + " " + sc.Hours,
+						Color:       0x0EB625,
 					},
 				},
 			},
