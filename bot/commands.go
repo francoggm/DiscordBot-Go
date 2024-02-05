@@ -2,11 +2,13 @@ package bot
 
 import (
 	"discord-bot/schedule"
+	"discord-bot/stockmarket"
+	"strings"
 
 	"github.com/bwmarrin/discordgo"
 )
 
-// Interactions
+/* Interactions commands */
 
 var (
 	commands = []*discordgo.ApplicationCommand{
@@ -38,16 +40,30 @@ var (
 				},
 			},
 		},
+		{
+			Name:        "findticker",
+			Description: "Try to find ticker information using keyword (support multiples with ',')",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Name:        "ticker",
+					Description: "Ticker keyword",
+					Type:        discordgo.ApplicationCommandOptionString,
+					Required:    true,
+				},
+			},
+		},
 	}
 
 	commandHandlers = map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate){
 		"hello-world": helloWorldHandler,
 		"schedule":    scheduleHandler,
+		"findticker":  findTickerHandler,
 	}
 )
 
-// Handlers functions
+/* Handlers functions */
 
+// return hello world
 var helloWorldHandler = func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -57,6 +73,7 @@ var helloWorldHandler = func(s *discordgo.Session, i *discordgo.InteractionCreat
 	})
 }
 
+// schedule a appointment and return to user when it is time
 var scheduleHandler = func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	var sc schedule.Schedule
 
@@ -107,4 +124,64 @@ var scheduleHandler = func(s *discordgo.Session, i *discordgo.InteractionCreate)
 			},
 		})
 	}
+}
+
+// search tickers from keywords
+var findTickerHandler = func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	options := i.ApplicationCommandData().Options
+
+	keywords := strings.Split(options[0].StringValue(), ",")
+	tickers := stockmarket.FindTickers(keywords)
+
+	ebs := make([]*discordgo.MessageEmbed, 0)
+	for _, ticker := range tickers {
+		ebs = append(ebs, &discordgo.MessageEmbed{
+			Type:  discordgo.EmbedTypeRich,
+			Title: ticker.Symbol,
+			Color: 0xffffff,
+			Fields: []*discordgo.MessageEmbedField{
+				{
+					Name:  "Name",
+					Value: ticker.Name,
+				},
+				{
+					Name:  "Type",
+					Value: ticker.Type,
+				},
+				{
+					Name:  "Region",
+					Value: ticker.Region,
+				},
+				{
+					Name:  "Open Market",
+					Value: ticker.OpenMarket,
+				},
+				{
+					Name:  "Close Market",
+					Value: ticker.CloseMarket,
+				},
+				{
+					Name:  "Timezone",
+					Value: ticker.TimeZone,
+				},
+				{
+					Name:  "Currency",
+					Value: ticker.Currency,
+				},
+				{
+					Name:  "Score",
+					Value: ticker.Score,
+				},
+			},
+		})
+	}
+
+	s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Title:   "Tickers",
+			Content: "Returned tickers from keywords",
+			Embeds:  ebs,
+		},
+	})
 }

@@ -5,9 +5,10 @@ import (
 )
 
 type Config struct {
-	BotToken string
-	AppID    string
-	GuildID  string
+	BotToken    string
+	AppID       string
+	GuildID     string
+	StockAPIKey string
 }
 
 var cfg *Config
@@ -28,6 +29,7 @@ func Read() error {
 	cfg.BotToken = viper.GetString("BOT_SECRET_KEY")
 	cfg.AppID = viper.GetString("APP_ID")
 	cfg.GuildID = viper.GetString("GUILD_ID")
+	cfg.StockAPIKey = viper.GetString("STOCK_API")
 
 	return nil
 }
